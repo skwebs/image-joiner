@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aadhaar Image Joiner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6 max-w-4xl w-full">
+        <h1 class="text-xl sm:text-2xl font-bold text-center mb-4 sm:mb-6">Aadhaar Image Joiner</h1>
+
+        <!-- Image Upload and Layout Selection -->
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Front Image Upload -->
+                <div class="flex flex-col items-center">
+                    <label for="frontImage" class="block text-sm font-medium text-gray-700 mb-2">Front Image</label>
+                    <input type="file" id="frontImage" accept="image/*" class="w-full p-2 border rounded text-sm"
+                        title="Upload front image">
+                    <img id="frontPreview" class="mt-2 max-w-full h-auto hidden rounded" alt="Front Preview">
+                    <button type="button" id="cropFrontBtn"
+                        class="mt-2 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 hidden">Crop
+                        Front</button>
+                </div>
+
+                <!-- Back Image Upload -->
+                <div class="flex flex-col items-center">
+                    <label for="backImage" class="block text-sm font-medium text-gray-700 mb-2">Back Image</label>
+                    <input type="file" id="backImage" accept="image/*" class="w-full p-2 border rounded text-sm">
+                    <img id="backPreview" class="mt-2 max-w-full h-auto hidden rounded" alt="Back Preview">
+                    <button type="button" id="cropBackBtn"
+                        class="mt-2 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 hidden">Crop
+                        Back</button>
+                </div>
+            </div>
+
+            <!-- Layout Selection -->
+            <div class="flex justify-center space-x-4">
+                <label class="flex items-center space-x-2">
+                    <input type="radio" name="layout" value="vertical" checked class="text-blue-500">
+                    <span class="text-sm">Vertical</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="radio" name="layout" value="horizontal" class="text-blue-500">
+                    <span class="text-sm">Horizontal</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Combined Image Preview -->
+        <div class="mt-4 sm:mt-6">
+            <h2 class="text-base sm:text-lg font-semibold text-center mb-2">Combined Image Preview</h2>
+            <canvas id="combinedCanvas" class="max-w-full h-auto mx-auto rounded border hidden"></canvas>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="mt-4 sm:mt-6 text-center">
+            <button id="combineBtn"
+                class="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 disabled:bg-gray-400"
+                disabled>Combine & Preview</button>
+            <a id="downloadLink"
+                class="bg-green-500 text-white px-4 py-2 rounded text-sm hover:bg-green-600 ml-2 hidden" href="#"
+                download="combined_aadhaar.jpg">Download Combined Image</a>
+        </div>
+    </div>
+
+    <!-- Crop Modal -->
+    <div id="cropModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-lg p-4 w-full max-w-md mx-2 max-h-[90vh] overflow-y-auto">
+            <h2 id="cropModalTitle" class="text-lg font-semibold mb-4">Crop Image</h2>
+            <div class="relative w-full h-64 sm:h-80">
+                <img id="cropImage" class="w-full h-full object-contain" alt="Crop Image">
+            </div>
+            <div class="mt-4 flex justify-end space-x-2">
+                <button id="cancelCropBtn"
+                    class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400">Cancel</button>
+                <button id="saveCropBtn" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">Save
+                    Crop</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const frontImageInput = document.getElementById('frontImage');
+        const backImageInput = document.getElementById('backImage');
+        const frontPreview = document.getElementById('frontPreview');
+        const backPreview = document.getElementById('backPreview');
+        const cropFrontBtn = document.getElementById('cropFrontBtn');
+        const cropBackBtn = document.getElementById('cropBackBtn');
+        const combinedCanvas = document.getElementById('combinedCanvas');
+        const combineBtn = document.getElementById('combineBtn');
+        const downloadLink = document.getElementById('downloadLink');
+        const cropModal = document.getElementById('cropModal');
+        const cropImage = document.getElementById('cropImage');
+        const cancelCropBtn = document.getElementById('cancelCropBtn');
+        const saveCropBtn = document.getElementById('saveCropBtn');
+        const cropModalTitle = document.getElementById('cropModalTitle');
+        const layoutRadios = document.getElementsByName('layout');
+        const ctx = combinedCanvas.getContext('2d');
+
+        let frontImg = null;
+        let backImg = null;
+        let cropper = null;
+        let currentCropTarget = null;
+
+        // Aadhaar aspect ratio (86mm x 54mm)
+        const aadhaarAspectRatio = 86 / 54; // ~1.59
+        // Standard size for combined images (in pixels)
+        const standardWidth = 600;
+        const standardHeight = Math.round(standardWidth / aadhaarAspectRatio);
+
+        // Handle front image upload
+        frontImageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                frontImg = new Image();
+                frontImg.onload = () => {
+                    frontPreview.src = frontImg.src;
+                    frontPreview.classList.remove('hidden');
+                    cropFrontBtn.classList.remove('hidden');
+                    checkImagesLoaded();
+                };
+                frontImg.src = URL.createObjectURL(file);
+            }
+        });
+
+        // Handle back image upload
+        backImageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                backImg = new Image();
+                backImg.onload = () => {
+                    backPreview.src = backImg.src;
+                    backPreview.classList.remove('hidden');
+                    cropBackBtn.classList.remove('hidden');
+                    checkImagesLoaded();
+                };
+                backImg.src = URL.createObjectURL(file);
+            }
+        });
+
+        // Enable combine button when both images are loaded
+        function checkImagesLoaded() {
+            if (frontImg && backImg) {
+                combineBtn.disabled = false;
+            }
+        }
+
+        // Open crop modal for front image
+        cropFrontBtn.addEventListener('click', () => {
+            currentCropTarget = 'front';
+            cropModalTitle.textContent = 'Crop Front Image';
+            cropImage.src = frontPreview.src;
+            cropModal.classList.remove('hidden');
+            initCropper();
+        });
+
+        // Open crop modal for back image
+        cropBackBtn.addEventListener('click', () => {
+            currentCropTarget = 'back';
+            cropModalTitle.textContent = 'Crop Back Image';
+            cropImage.src = backPreview.src;
+            cropModal.classList.remove('hidden');
+            initCropper();
+        });
+
+        // Initialize Cropper.js
+        function initCropper() {
+            if (cropper) cropper.destroy();
+            cropper = new Cropper(cropImage, {
+                aspectRatio: aadhaarAspectRatio,
+                viewMode: 1,
+                autoCropArea: 0.8,
+                responsive: true,
+            });
+        }
+
+        // Cancel crop
+        cancelCropBtn.addEventListener('click', () => {
+            cropModal.classList.add('hidden');
+            if (cropper) cropper.destroy();
+        });
+
+        // Save cropped image
+        saveCropBtn.addEventListener('click', () => {
+            if (cropper) {
+                const croppedCanvas = cropper.getCroppedCanvas({
+                    width: standardWidth,
+                    height: standardHeight,
+                });
+                const croppedImage = new Image();
+                croppedImage.onload = () => {
+                    if (currentCropTarget === 'front') {
+                        frontImg = croppedImage;
+                        frontPreview.src = croppedImage.src;
+                    } else {
+                        backImg = croppedImage;
+                        backPreview.src = croppedImage.src;
+                    }
+                    cropModal.classList.add('hidden');
+                    cropper.destroy();
+                    checkImagesLoaded();
+                };
+                croppedImage.src = croppedCanvas.toDataURL('image/jpeg');
+            }
+        });
+
+        // Combine images on button click
+        combineBtn.addEventListener('click', () => {
+            const layout = Array.from(layoutRadios).find(radio => radio.checked).value;
+
+            // Resize images to standard size
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = standardWidth;
+            tempCanvas.height = standardHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // Resize front image
+            const frontResized = new Image();
+            frontResized.src = frontImg.src;
+            tempCtx.drawImage(frontResized, 0, 0, standardWidth, standardHeight);
+            const frontResizedData = tempCanvas.toDataURL('image/jpeg');
+            frontResized.src = frontResizedData;
+
+            // Resize back image
+            const backResized = new Image();
+            backResized.src = backImg.src;
+            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+            tempCtx.drawImage(backResized, 0, 0, standardWidth, standardHeight);
+            const backResizedData = tempCanvas.toDataURL('image/jpeg');
+            backResized.src = backResizedData;
+
+            // Wait for resized images to load
+            Promise.all([
+                new Promise(resolve => frontResized.onload = resolve),
+                new Promise(resolve => backResized.onload = resolve),
+            ]).then(() => {
+                // Set canvas dimensions based on layout
+                let canvasWidth, canvasHeight;
+                if (layout === 'vertical') {
+                    canvasWidth = standardWidth;
+                    canvasHeight = standardHeight * 2;
+                } else {
+                    canvasWidth = standardWidth * 2;
+                    canvasHeight = standardHeight;
+                }
+
+                // Set canvas size
+                combinedCanvas.width = canvasWidth;
+                combinedCanvas.height = canvasHeight;
+                combinedCanvas.classList.remove('hidden');
+
+                // Draw images based on layout
+                if (layout === 'vertical') {
+                    ctx.drawImage(frontResized, 0, 0, standardWidth, standardHeight);
+                    ctx.drawImage(backResized, 0, standardHeight, standardWidth, standardHeight);
+                } else {
+                    ctx.drawImage(frontResized, 0, 0, standardWidth, standardHeight);
+                    ctx.drawImage(backResized, standardWidth, 0, standardWidth, standardHeight);
+                }
+
+                // Generate download link
+                downloadLink.href = combinedCanvas.toDataURL('image/jpeg');
+                downloadLink.classList.remove('hidden');
+            });
+        });
+    </script>
+</body>
+
+</html>
