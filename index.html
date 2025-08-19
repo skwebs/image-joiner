@@ -151,6 +151,10 @@
         function checkImagesLoaded() {
             if (frontImg && backImg) {
                 combineBtn.disabled = false;
+                // Auto-combine if preview is already visible
+                if (!combinedCanvas.classList.contains('hidden')) {
+                    combineImages();
+                }
             }
         }
 
@@ -213,8 +217,8 @@
             }
         });
 
-        // Combine images on button click
-        combineBtn.addEventListener('click', () => {
+        // Combine images function
+        function combineImages() {
             const layout = Array.from(layoutRadios).find(radio => radio.checked).value;
 
             // Resize images to standard size
@@ -258,7 +262,7 @@
                 combinedCanvas.height = canvasHeight;
                 combinedCanvas.classList.remove('hidden');
 
-                // Clear canvas and set background (optional, white for clarity)
+                // Clear canvas and set background (white for clarity)
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
@@ -274,6 +278,18 @@
                 // Generate download link
                 downloadLink.href = combinedCanvas.toDataURL('image/jpeg');
                 downloadLink.classList.remove('hidden');
+            });
+        }
+
+        // Combine images on button click
+        combineBtn.addEventListener('click', combineImages);
+
+        // Update preview when layout changes
+        layoutRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (frontImg && backImg && !combinedCanvas.classList.contains('hidden')) {
+                    combineImages();
+                }
             });
         });
     </script>
