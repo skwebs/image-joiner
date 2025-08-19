@@ -19,9 +19,9 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <!-- Front Image Upload -->
                 <div class="flex flex-col items-center">
-                    <label for="frontImage" class="block text-sm font-medium text-gray-700 mb-2">Front Image</label>
-                    <input type="file" id="frontImage" accept="image/*" class="w-full p-2 border rounded text-sm"
-                        title="Upload front image">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Front Image</label>
+                    <input placeholder="Front Image" type="file" id="frontImage" accept="image/*"
+                        class="w-full p-2 border rounded text-sm">
                     <img id="frontPreview" class="mt-2 max-w-full h-auto hidden rounded" alt="Front Preview">
                     <button type="button" id="cropFrontBtn"
                         class="mt-2 bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 hidden">Crop
@@ -60,7 +60,7 @@
 
         <!-- Action Buttons -->
         <div class="mt-4 sm:mt-6 text-center">
-            <button id="combineBtn"
+            <button type="button" id="combineBtn"
                 class="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 disabled:bg-gray-400"
                 disabled>Combine & Preview</button>
             <a id="downloadLink"
@@ -77,9 +77,10 @@
                 <img id="cropImage" class="w-full h-full object-contain" alt="Crop Image">
             </div>
             <div class="mt-4 flex justify-end space-x-2">
-                <button id="cancelCropBtn"
+                <button type="button" id="cancelCropBtn"
                     class="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400">Cancel</button>
-                <button id="saveCropBtn" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">Save
+                <button type="button" id="saveCropBtn"
+                    class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">Save
                     Crop</button>
             </div>
         </div>
@@ -113,6 +114,8 @@
         // Standard size for combined images (in pixels)
         const standardWidth = 600;
         const standardHeight = Math.round(standardWidth / aadhaarAspectRatio);
+        // Gap between images (in pixels)
+        const gap = 5;
 
         // Handle front image upload
         frontImageInput.addEventListener('change', (e) => {
@@ -175,7 +178,7 @@
             cropper = new Cropper(cropImage, {
                 aspectRatio: aadhaarAspectRatio,
                 viewMode: 1,
-                autoCropArea: 0.8,
+                autoCropArea: 1,
                 responsive: true,
             });
         }
@@ -240,13 +243,13 @@
                 new Promise(resolve => frontResized.onload = resolve),
                 new Promise(resolve => backResized.onload = resolve),
             ]).then(() => {
-                // Set canvas dimensions based on layout
+                // Set canvas dimensions based on layout, including gap
                 let canvasWidth, canvasHeight;
                 if (layout === 'vertical') {
                     canvasWidth = standardWidth;
-                    canvasHeight = standardHeight * 2;
+                    canvasHeight = standardHeight * 2 + gap;
                 } else {
-                    canvasWidth = standardWidth * 2;
+                    canvasWidth = standardWidth * 2 + gap;
                     canvasHeight = standardHeight;
                 }
 
@@ -255,13 +258,17 @@
                 combinedCanvas.height = canvasHeight;
                 combinedCanvas.classList.remove('hidden');
 
-                // Draw images based on layout
+                // Clear canvas and set background (optional, white for clarity)
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+                // Draw images based on layout with gap
                 if (layout === 'vertical') {
                     ctx.drawImage(frontResized, 0, 0, standardWidth, standardHeight);
-                    ctx.drawImage(backResized, 0, standardHeight, standardWidth, standardHeight);
+                    ctx.drawImage(backResized, 0, standardHeight + gap, standardWidth, standardHeight);
                 } else {
                     ctx.drawImage(frontResized, 0, 0, standardWidth, standardHeight);
-                    ctx.drawImage(backResized, standardWidth, 0, standardWidth, standardHeight);
+                    ctx.drawImage(backResized, standardWidth + gap, 0, standardWidth, standardHeight);
                 }
 
                 // Generate download link
